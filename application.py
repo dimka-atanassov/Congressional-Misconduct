@@ -89,91 +89,42 @@ def load_data():
 
     misconduct_from_yaml['first_year'] = misconduct_from_yaml['first_date'].apply(lambda x: make_year(x))
     misconduct_from_yaml['last_year'] = misconduct_from_yaml['last_date'].apply(lambda x: make_year(x))
+    misconduct_from_yaml['first_decade'] = (misconduct_from_yaml['first_year']//10) *10 #get the floored integer
+    misconduct_from_yaml['first_two_years'] = (misconduct_from_yaml['first_year']//2) *2 #get the floored integer
+    misconduct_from_yaml['first_four_years'] = (misconduct_from_yaml['first_year']//4) * 4 #get the floored integer
+
+
     app.vars['misconduct'] = misconduct_from_yaml
     return misconduct_from_yaml
 
 
-def create_plots(misconduct_by_year_total):
-       
-    corruption = Scatter(
-    x=misconduct_by_year_total['first_year'],
-    y= misconduct_by_year_total['corruption'],
-    mode = 'lines+markers',
-    name = 'Corruption')
-
-    #app.logger.info(corruption)
-
-    crime = Scatter(
-    x=misconduct_by_year_total['first_year'],
-    y= misconduct_by_year_total['crime'],
-    mode = 'lines+markers',
-    name = 'Crime')
-
-    elections = Scatter(
-    x=misconduct_by_year_total['first_year'],
-    y= misconduct_by_year_total['elections'],
-    mode = 'lines+markers',
-    name = 'Elections')
-
-    ethics = go.Scatter(
-    x=misconduct_by_year_total['first_year'],
-    y= misconduct_by_year_total['ethics'],
-    mode = 'lines+markers',
-    name='Ethics')
-
-    sexual_harassment = Scatter(
-    x=misconduct_by_year_total['first_year'],
-    y= misconduct_by_year_total['sexual-harassment-abuse'],
-    mode = 'lines+markers',
-    name = 'Sexual Harassment')
-
-    total = Scatter(
-    x=misconduct_by_year_total['first_year'],
-    y= misconduct_by_year_total['corruption']+ misconduct_by_year_total['crime']+ 
-        misconduct_by_year_total['elections']+
-        misconduct_by_year_total['ethics'] +
-        misconduct_by_year_total['sexual-harassment-abuse'],
-    mode = 'lines+markers',
-    name = 'Total')
-
-
-    layout = dict(title = 'Congressional Misconduct by Year',
-              xaxis = dict(title = 'Year'),
-              yaxis = dict(title = 'Number of Instances'),
-              )
-    
-    fig = Figure(data=[corruption, crime, elections, ethics, sexual_harassment, total], layout=layout)
-
-    plot_url = plot(fig, filename='line-mode', output_type='div')
-    app.vars['by_year_plot'] = plot_url
-    return plot_url
         
-def create_bar(misconduct_by_year_total):
+def create_bar(misconduct_by_year_total, aggregation_col):
 
     layout = Layout(barmode='stack')
 
     corruption = Bar(
-    x=misconduct_by_year_total['first_year'],
+    x=misconduct_by_year_total[aggregation_col],
     y= misconduct_by_year_total['corruption'],
     name = 'Corruption')
 
     crime = Bar(
-    x=misconduct_by_year_total['first_year'],
+    x=misconduct_by_year_total[aggregation_col],
     y= misconduct_by_year_total['crime'],
     name = 'Crime')
 
     elections = Bar(
-    x=misconduct_by_year_total['first_year'],
+    x=misconduct_by_year_total[aggregation_col],
     y= misconduct_by_year_total['elections'],
     name = 'Elections')
 
     ethics = Bar(
-    x=misconduct_by_year_total['first_year'],
+    x=misconduct_by_year_total[aggregation_col],
     y= misconduct_by_year_total['ethics'],
     name='Ethics')
 
     sexual_harassment = Bar(
-    x=misconduct_by_year_total['first_year'],
+    x=misconduct_by_year_total[aggregation_col],
     y= misconduct_by_year_total['sexual-harassment-abuse'],
     name = 'Sexual Harassment')
 
@@ -192,6 +143,8 @@ def index():
 
     misconduct = {}
     load_data()
+    aggregation_col = 'first_year'
+    fig = ''
     
     if request.method == 'GET':
  
@@ -209,7 +162,7 @@ def index():
         if misconduct_by_year_total.shape[0] ==0:
             return render_template('/index.html', fig='there was an error loading the data')
         else:
-            fig = create_plots(misconduct_by_year_total)
+            fig = create_bar(misconduct_by_year_total, aggregation_col)
             if fig:
                 embeded_fig= fig
                 return render_template('/index.html', fig=embeded_fig)
@@ -221,52 +174,48 @@ def index():
 
         app.logger.info('in post')
         presentation_mode = request.form['options']
-        if presentation_mode == 'StackBar':
-            if 'by_year_bar' in app.vars.keys():
-                fig = app.vars['by_year_bar']
-                return render_template('/index.html', fig=fig)
-            else:
-                if 'misconduct' in app.vars.keys():
-                    misconduct = app.vars['misconduct']
-                    if misconduct.shape[0]==0:
-                        return render_template('/index.html', fig='There was an error loading data')
+        aggregated_misconduct = None
+        
+ 
+        #load the dataframe
+        if 'misconduct' in app.vars.keys():
+            misconduct = app.vars['misconduct']
+            if misconduct.shape[0]==0:
+                return render_template('/index.html', fig='There was an error loading data')
 
-                    misconduct_by_year_total = misconduct.groupby('first_year')['corruption',
+        #get aggregation granularity
+        if presentation_mode == 'ShowYearly':
+            aggregation_col = 'first_year'
+            
+        elif presentation_mode =='ShowDecade':
+            aggregation_col = 'first_decade'
+ 
+        elif presentation_mode == 'Show2Years':
+            aggregation_col = 'first_two_years'
+                
+        elif presentation_mode == 'Show4Years':
+            aggregation_col = 'first_four_years'
+ 
+
+        aggregated_misconduct = misconduct.groupby(aggregation_col)['corruption',
                                                                     'crime', 'elections', 'ethics',
                                                                     'sexual-harassment-abuse'].sum().reset_index()
+   
+        if aggregated_misconduct is None:
+            return render_template('/index.html', fig='there was an error loading the data')
+        elif aggregated_misconduct.shape[0] ==0:
+            return render_template('/index.html', fig='there was an error loading the data')
 
-                    if misconduct_by_year_total.shape[0] ==0:
-                        return render_template('/index.html', fig='there was an error loading the data')
-                    
-                    fig = create_bar(misconduct_by_year_total)
-                    if fig:
-                        return render_template('/index.html', fig=fig)
-                    else:
-                        return render_template('/index.html', fig='There was an error creating plots')
                         
-        elif presentation_mode =='LinePlot':
-            
-            if 'by_year_plot' in app.vars.keys():
-                fig = app.vars['by_year_plot']
-                return render_template('/index.html', fig=fig)
-            
-            if 'misconduct' in app.vars.keys():
-                misconduct = app.vars['misconduct']
-                if misconduct.shape[0]==0:
-                    return render_template('/index.html', fig='There was an error loading data')
-
-                misconduct_by_year_total = misconduct.groupby('first_year')['corruption',
-                                                            'crime', 'elections', 'ethics',
-                                                            'sexual-harassment-abuse'].sum().reset_index()
-
-                if misconduct_by_year_total.shape[0] ==0:
-                    return render_template('/index.html', fig='there was an error loading the data')
-                fig = create_plots(misconduct_by_year_total)
-                if fig:
-                    return render_template('/index.html', fig=fig)
-                else:
-                    return render_template('/index.html', fig='There was an error creating plots')
+        fig = create_bar(aggregated_misconduct, aggregation_col)
                 
+        if fig:
+            return render_template('/index.html', fig=fig)
+        else:
+            return render_template('/index.html', fig='There was an error creating plots')
+            
+                        
+                        
                         
 if __name__ == '__main__':
     app.run(debug=True)
