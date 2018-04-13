@@ -104,7 +104,7 @@ def load_data():
         
 def create_bar(misconduct_by_year_total, aggregation_col, display_coulumns):
     '''Receives a data frame aggregated by aggregation_col (year, decade, two or four year periods)
-    and the aggregation_col. Creates a bar plot of the total number of miscounducts
+    and the aggregation_col. Creates a bar plot of the total number of miscounducts/consequences
     and returns that'''
 
     layout = Layout(barmode='stack')
