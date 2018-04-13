@@ -47,6 +47,7 @@ def load_data():
     all_tags = set()
     conseq_tags = []
     top_tags=set()
+    conseq_set = set()
 
 
     for item in misconduct_json:
@@ -62,6 +63,7 @@ def load_data():
         for conseq in consequences:
             if 'tags' in conseq.keys():
                 curr_conseq_tags.extend(conseq['tags'].split(" "))
+                conseq_set.update(conseq['tags'].split(" "))
         conseq_tags.append(curr_conseq_tags)
         start_date = start_consequences['date']
         end_date = end_consequences['date']
@@ -95,13 +97,38 @@ def load_data():
 
 
     app.vars['misconduct'] = misconduct_from_yaml
+    app.vars['consequences'] = conseq_set
     return misconduct_from_yaml
 
 
         
-def create_bar(misconduct_by_year_total, aggregation_col):
+def create_bar(misconduct_by_year_total, aggregation_col, display_coulumns):
+    '''Receives a data frame aggregated by aggregation_col (year, decade, two or four year periods)
+    and the aggregation_col. Creates a bar plot of the total number of miscounducts
+    and returns that'''
 
     layout = Layout(barmode='stack')
+
+    if display_coulumns is not None:
+        conseq_bar_data=[]
+        
+        for col in display_coulumns:
+          bar_item = Bar(
+          x=misconduct_by_year_total[aggregation_col],
+          y= misconduct_by_year_total[col],
+          name = col)
+          conseq_bar_data.append(bar_item)
+
+
+        layout = Layout(
+            barmode='stack'
+        )
+        
+        fig = Figure(data=conseq_bar_data, layout=layout)
+        plot_url = plot(fig, filename='stacked-bar', output_type='div')
+        return plot_url
+
+
 
     corruption = Bar(
     x=misconduct_by_year_total[aggregation_col],
@@ -133,7 +160,7 @@ def create_bar(misconduct_by_year_total, aggregation_col):
     fig = Figure(data=data, layout=layout)
     plot_url = plot(fig, filename='stacked-bar', output_type='div')
 
-    app.vars['by_year_bar'] = plot_url
+    #app.vars['by_year_bar'] = plot_url
     return plot_url
 
 
@@ -162,7 +189,7 @@ def index():
         if misconduct_by_year_total.shape[0] ==0:
             return render_template('/index.html', fig='there was an error loading the data')
         else:
-            fig = create_bar(misconduct_by_year_total, aggregation_col)
+            fig = create_bar(misconduct_by_year_total, aggregation_col, None)
             if fig:
                 embeded_fig= fig
                 return render_template('/index.html', fig=embeded_fig)
@@ -207,15 +234,96 @@ def index():
             return render_template('/index.html', fig='there was an error loading the data')
 
                         
-        fig = create_bar(aggregated_misconduct, aggregation_col)
+        fig = create_bar(aggregated_misconduct, aggregation_col, None)
                 
         if fig:
             return render_template('/index.html', fig=fig)
         else:
             return render_template('/index.html', fig='There was an error creating plots')
             
-                        
-                        
+
+@app.route('/consequences', methods=['GET', 'POST'])
+def consequences():
+    aggregated_consequences = None
+    aggregation_col = 'first_year'
+    display_columns = []
+     
+    if request.method == 'GET':
+        if 'misconduct' in app.vars.keys():
+            misconduct = app.vars['misconduct']
+        else:
+            misconduct= load_data()
+        aggregated_consequences = misconduct.groupby('first_year')['allegation', 'conseq_tags', 'first_date', 'last_date', 'name',
+                                                                    'person', 'tags', 'text', 'resignation', 'plea', 'resolved',
+                                                                    'settlement', 'ethics', 'crime', 'exclusion', 'reprimand', 'elections',
+                                                                    'expulsion', 'corruption', 'censure', 'sexual-harassment-abuse',
+                                                                    'unresolved', 'conviction'].sum().reset_index()
+
+        if aggregated_consequences is None:
+            return render_template('/consequences.html', fig='there was an error loading the data')
+        
+        elif aggregated_consequences.shape[0] ==0:
+            return render_template('/consequences.html', fig='there was an error loading the data')
+        
+        else:
+            display_columns = app.vars['consequences']
+            fig = create_bar(aggregated_consequences, aggregation_col, display_columns)
+            if fig:
+                embeded_fig= fig
+                return render_template('/consequences.html', fig=embeded_fig)
+            else:
+                return render_template('/consequences.html', fig='There was an error creating plots')
+
+    elif request.method =='POST':
+
+        app.logger.info('in post')
+        presentation_mode = request.form['options']
+        
+ 
+        #load the dataframe
+        if 'misconduct' in app.vars.keys():
+            misconduct = app.vars['misconduct']
+        else:
+            misconduct= load_data()
+            
+        if misconduct.shape[0]==0:
+            return render_template('/index.html', fig='There was an error loading data')
+
+        #get aggregation granularity
+        if presentation_mode == 'ShowYearly':
+            aggregation_col = 'first_year'
+            
+        elif presentation_mode =='ShowDecade':
+            aggregation_col = 'first_decade'
+ 
+        elif presentation_mode == 'Show2Years':
+            aggregation_col = 'first_two_years'
+                
+        elif presentation_mode == 'Show4Years':
+            aggregation_col = 'first_four_years'
+         
+        aggregated_consequences = misconduct.groupby(aggregation_col)['allegation', 'conseq_tags', 'first_date', 'last_date', 'name',
+                                                                    'person', 'tags', 'text', 'resignation', 'plea', 'resolved',
+                                                                    'settlement', 'ethics', 'crime', 'exclusion', 'reprimand', 'elections',
+                                                                    'expulsion', 'corruption', 'censure', 'sexual-harassment-abuse',
+                                                                    'unresolved', 'conviction'].sum().reset_index()
+
+        if aggregated_consequences is None:
+            return render_template('/consequences.html', fig='there was an error loading the data')
+        
+        elif aggregated_consequences.shape[0] ==0:
+            return render_template('/consequences.html', fig='there was an error loading the data')
+        
+        else:
+            display_columns = app.vars['consequences']
+            fig = create_bar(aggregated_consequences, aggregation_col, display_columns)
+            if fig:
+                embeded_fig= fig
+                return render_template('/consequences.html', fig=embeded_fig)
+            else:
+                return render_template('/consequences.html', fig='There was an error creating plots')
+
+                       
                         
 if __name__ == '__main__':
     app.run(debug=True)
