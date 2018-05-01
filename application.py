@@ -323,7 +323,74 @@ def consequences():
             else:
                 return render_template('/consequences.html', fig='There was an error creating plots')
 
-                       
+def get_resolution_rate(categories, data):
+    ''' A helper function that gets a list of crime categories and the data
+    and returns resolution rate for each crime'''
+    resolution_rate = {}
+    for c in categories:
+        relevant_data = data[data[c]==1]
+        total = relevant_data.shape[0]
+        unresolved = np.sum(relevant_data['unresolved'])
+        resolved = total- unresolved
+        resolved_rate = resolved/(total*1.0)
+        resolution_rate[c]= resolved_rate
+    return resolution_rate
+
+
+def create_resolution_bar(resolution_rate):
+    '''Creates and returns the resolution rate bar chart'''
+    layout = Layout(barmode='stack')
+
+    if resolution_rate is not None:
+        bar_item = [Bar(
+            x= [k for k in resolution_rate.keys()],
+            y=[v for v in resolution_rate.values()])]
+        
+        
+        fig = Figure(data=bar_item)
+        plot_url = plot(fig, filename='basic-bar', output_type='div')
+        return plot_url
+    return None
+
+
+
+@app.route('/resolution', methods=['GET', 'POST'])
+def resolution():
+    current_year = 2018
+    categories = ['corruption', 'crime','elections', 'ethics', 'sexual-harassment-abuse']
+    if request.method == 'GET':
+        misconduct = None
+        if 'misconduct' in app.vars.keys():
+            misconduct = app.vars['misconduct']
+        else:
+            misconduct= load_data()
+        last_50 = misconduct[current_year - misconduct['first_year']<=50]
+        resoulution_rate = get_resolution_rate(categories, last_50)
+        resoulution_plot = create_resolution_bar(resoulution_rate)
+        return render_template('/resolution.html', fig=resoulution_plot)
+    
+    elif request.method =='POST':
+        period = request.form['options']
+        
+        misconduct = None
+        if 'misconduct' in app.vars.keys():
+            misconduct = app.vars['misconduct']
+        else:
+            misconduct= load_data()
+        
+
+        timeframe = 50
+        if period == 'Show50':
+            timeframe = 50
+        elif period == 'Show100':
+            timeframe = 100
+        data_in_period = misconduct[current_year - misconduct['first_year']<=timeframe]
+        
+        resoulution_rate = get_resolution_rate(categories, data_in_period)
+        resoulution_plot = create_resolution_bar(resoulution_rate)
+        return render_template('/resolution.html', fig=resoulution_plot)
+    
+                                   
                         
 if __name__ == '__main__':
     app.run(debug=True)

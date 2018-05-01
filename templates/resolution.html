@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %} - Resolution Rate{% endblock %}
+{% block content %}
+
+<div class = "row">
+<div class = "col-md-9">
+	<div>
+  		{{ fig | safe}}
+    		
+	</div>
+</div>
+
+<div class = "col-md-3">
+	<form id='userselection' method='post' action=''  >
+    	<input type="radio" name="options" id="LinePlot" value="Show50"> Show last 50 years</input><br>
+		<input type="radio" name="options" id="StackBar" value="Show100"> Show last 100 years</input><br>
+		
+		<p>
+           <button class="btn btn-primary" type="submit">Submit</button>
+         </p>
+	</form>
+</div>
+</div>
+		
+
+{% endblock %}
